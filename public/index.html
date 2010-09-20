@@ -20,6 +20,7 @@
 			}
 			
 			#panel {
+				color:#ffffff;
 				position:absolute;
 				width:255px;
 				height:485px;
@@ -39,7 +40,6 @@
 			
     	</style>
 		<script>
-		//alert(_.any([1,2,3,4,0], function(num){ return num == 0; }));
 			io.setPath('client/');
 			var socket = new io.Socket(null, {port: 8080});
 			io.Socket.prototype.sendData = function(type,data) {
@@ -50,15 +50,39 @@
 				this.send(JSON.stringify(dataObject));
 			};
 			
-			socket.connect();
-			
 			function panel(panel) {
 
 				this.panel = panel;
 				this.panel.height($(document).height()*80/100);
+				this.playerFbId;
 				
 				this.screenResize = function(){
 					this.panel.height($(window).height()*80/100);
+				}
+				
+				this.addPlayer = function(id){
+					getUserInfos(id,['name','id'],function(response){
+						player = response[0];
+						$('#players').append('<li id="' + player.id + '">'+player.name+'</li>');
+					});
+				}
+				
+				this.addPlayers = function(players){
+					_.each(players,function(player){
+							this.addPlayer(player.fbId);
+					},this);
+				}
+				
+				this.deleteUser = function(id){
+					$('#'+id).remove();
+				}
+				
+				this.userAlreadyConnected = function(){
+					$('#user').html('Already logged in, in another window');
+				}
+				
+				this.connect = function(user){
+					$('#user').html('<h2>' + user.name + '</h2>');
 				}
 				
 			}
@@ -157,14 +181,61 @@
 			}
 
 			$(document).ready(function(){
+				
+				socket.addEvent('message', function(data){
+					
+					data = JSON.parse(data);
+					switch(data.type) {
+						case 'drawingData':
+							if(drawObject){
+								drawObject.drawArray(data.data);
+								$.merge(drawObject.points,data.data);
+							}
+						break;
+						case 'usersList':
+							panelObject.addPlayers(data.data);	
+						break;
+						case 'userConnect':
+							panelObject.addPlayer(data.data);
+						break;
+						case 'userDisconnect':
+							panelObject.deleteUser(data.data);
+						break;
+						case 'userAlreadyConnected':
+							panelObject.userAlreadyConnected();
+						break;
+					}
+				
+				});
+				
+				socket.addEvent('disconnect', function(data){
+				});
+				
+				socket.addEvent('connect', function(data){
+				});
+				
+				socket.connect();
 			
 				FB.init({ apiKey: '41498240faa11983d28cc4504b952284' });
 				
 				FB.getLoginStatus(handleSessionResponse);
 				
+				
 				$('#login').click(function(){
 					FB.login(handleSessionResponse);
 				});
+				
+				
+				
+				getUserInfos = function(id,fields,callback){
+					FB.api({
+						method:'fql.query',
+						query: 'SELECT '+ fields.toString() +' FROM profile WHERE id=' + id
+						},
+						callback
+					);
+				
+				}
 				
 				
 				function handleSessionResponse(response){
@@ -178,10 +249,8 @@
 						query: 'SELECT name,id FROM profile WHERE id=' + FB.getSession().uid
 						},
 						function(response){
-							var user = response[0];
-							$('#login').hide();
-							$('#user').html('<h2>' + user.name + '</h2>');
-							socket.sendData('userConnect',user.id);
+							panelObject.connect(response[0]);
+							socket.sendData('userConnect',response[0].id);
 						}
 					);
 					
@@ -189,26 +258,6 @@
 				
 				var drawObject = new draw($("#board"),socket);
 				var panelObject = new panel($("#panel"));
-				
-				socket.addEvent('message', function(data){
-					
-					data = JSON.parse(data);
-					switch(data.type) {
-						case 'drawingData':
-							if(drawObject){
-								drawObject.drawArray(data.data);
-								$.merge(drawObject.points,data.data);
-							}
-						break
-					}
-				
-				});
-				
-				socket.addEvent('disconnect', function(data){
-				});
-				
-				socket.addEvent('connect', function(data){
-				});
 				
 				$(window).resize(function() {
 					drawObject.screenResize();
@@ -236,9 +285,8 @@
 			<div id="user">
 				<button id="login">Login</button>
 			</div>
-			<div id="players">
-				<div class="player"></div>
-			</div>
+			<ul id="players">
+			</ul>
 		</div>
 		<canvas id="board">	
 		</canvas>

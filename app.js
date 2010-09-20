@@ -60,29 +60,50 @@ var users = [];
 
 io.on('connection', function(client){
 
-
+	client.send(JSON.stringify({'type':'usersList','data':users}));
+	sys.log('--------USERS:list-------');
+	_.each(users,function(user){sys.log(user.fbId);});
+	sys.log('--------------------');
+	
 	client.on('message', function(message){
 		data = JSON.parse(message);
-		sys.log(data.type + ' : ' + data.data);
 		switch (data.type) {
 			case('drawingData'):
 				client.broadcast(message);
 			break;
 			case('userConnect'):
-				if(_.any(users, function(num){ return num.fbId == data.data; }))
+				if(_.any(users, function(num){ return num.fbId == data.data; })) {
+					client.send(JSON.stringify({'type':'userAlreadyConnected','data':''}));
+					sys.log('=');
 					break;
-				users.push({id:client.sessionId,fbId:data.data});
-				client.broadcast(message);
-			break;
+				} else {
+					users.push({id:client.sessionId,fbId:data.data});
+					sys.log('--------USERS:push-------');
+					_.each(users,function(user){sys.log(user.fbId);});
+					sys.log('--------------------');
+					client.broadcast(message);
+					break;
+				}
 		}
 
 	});
 
 
 	client.on('disconnect', function(){
-		//We clean users array on disconnect
+		//We delete user from users array on disconnect
 		if(_.any(users, function(i){ return i.id == client.sessionId; })){
-			users = _.reject(users, function(i){ return i.id == client.sessionId; });
+			users = _.reject(users, function(i){ 
+				if(i.id == client.sessionId) {
+					client.broadcast(JSON.stringify({'type':'userDisconnect','data':i.fbId}));
+					sys.log('--------USERS:disconnect-------');
+					_.each(users,function(user){sys.log(i.fbId);});
+					sys.log('--------------------');
+					return true;
+				} else {
+					return false;
+				}
+			});
+			
 		}
 	});
 
