@@ -80,7 +80,7 @@ io.on('connection', function(client){
 
 
 	client.on('disconnect', function(){
-		//We clean users array
+		//We clean users array on disconnect
 		if(_.any(users, function(i){ return i.id == client.sessionId; })){
 			users = _.reject(users, function(i){ return i.id == client.sessionId; });
 		}
