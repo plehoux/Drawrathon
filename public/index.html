@@ -40,15 +40,7 @@
 			
     	</style>
 		<script>
-			io.setPath('client/');
-			var socket = new io.Socket(null, {port: 8080});
-			io.Socket.prototype.sendData = function(type,data) {
-				dataObject = {
-					type : type,
-					data : data
-					};
-				this.send(JSON.stringify(dataObject));
-			};
+			
 			
 			function panel(panel) {
 
@@ -60,218 +52,273 @@
 					this.panel.height($(window).height()*80/100);
 				}
 				
-				this.addPlayer = function(id){
-					getUserInfos(id,['name','id'],function(response){
-						player = response[0];
-						$('#players').append('<li id="' + player.id + '">'+player.name+'</li>');
-					});
+			}
+			
+			function Users(config){
+				
+				if( typeof( name ) == "undefined" ){
+					return;
 				}
 				
-				this.addPlayers = function(players){
-					_.each(players,function(player){
-							this.addPlayer(player.fbId);
-					},this);
+				//List of object parameters pass as an object
+				this.config = {
+					'fbApiKey':'',
+					'socket':'',
+					'loginDivObject':''
 				}
 				
-				this.deleteUser = function(id){
-					$('#'+id).remove();
-				}
+				_.extend(this.config,config);
 				
-				this.userAlreadyConnected = function(){
-					$('#user').html('Already logged in, in another window');
-				}
+				//Array of all logged in facebook users using the app
+				this.users=[];
+				//Object containing the logged in user infos			
+				this.user={};
 				
-				this.connect = function(user){
-					$('#user').html('<h2>' + user.name + '</h2>');
+				if(this.config.fbApiKey){
+					FB.init({ apiKey: this.config.fbApiKey });
+					FB.getLoginStatus(_.bind(this.fbHandleSessionResponse, this));
+				} else {
+					return false;	
 				}
 				
 			}
 			
-			function draw(canevas,socket){
-				this.canevas = canevas;
-
+			Users.prototype.fbQueryProfile = function(id,fields,callback){
+				FB.api({
+					method:'fql.query',
+					query: 'SELECT '+ fields.toString() +' FROM profile WHERE id=' + id
+					},
+					callback
+				);
+			}
 			
-				this.socket = socket;
-				if(this.canevas[0].getContext){
-					
-					this.ctx = this.canevas[0].getContext("2d");
-					
-
-					this.drawing = false;
-					
-					this.points = [];
-					this.pointsTemp = [];
-					
-					this.canevas[0].height = ($(document).height()-6);
-					this.canevas[0].width = $(document).width();
-					
-
-					this.canevas.bind('mousedown',this,function(e){
-							e.data.drawDown(e.pageX,e.pageY);
+			Users.prototype.fbHandleSessionResponse = function(response){
+				if(!response.session)
+					return false;
+				
+				var callback = function(response){ 
+					this.userConnect(response[0]);
+					this.config.socket.sendData('userConnect',response[0].id);
+				};
+				callback = _.bind(callback, this);
+				this.fbQueryProfile(FB.getSession().uid,['name','id'],callback);
+			
+			}
+			
+			Users.prototype.userConnect = function(user){
+				this.user = {'id':user.id,'name':user.name,'artist':false};
+				if(this.config.loginDivObject)
+					this.config.loginDivObject.html(this.user.name);
+			}
+			
+			Users.prototype.addUser = function(fbId,delegate){
+				
+				var _this = {'_this':this,'delegate':delegate}; 
+				
+				var callback = function(response){ 
+					this._this.users.push({
+						'id':response[0].id,
+						'name':response[0].name
 					});
-					
-					this.canevas.bind('mousemove',this,function(e){
-						e.data.drawMove(e.pageX,e.pageY);
-					});
-					
-					this.canevas.bind('mouseup',this,function(e){
-								e.data.drawUp();
-					});
-					
-				}else{
+					if(this.delegate)
+						this.delegate(response[0]);
+				};
+				
+				callback = _.bind(callback, _this);
+				this.fbQueryProfile(fbId,['name','id'],callback);
+			}
+			
+			Users.prototype.addUsers = function(users){
+				_.each(users,function(user){
+						this.addUser(user.fbId);
+				},this);
+			}
+			
+			Users.prototype.deleteUser = function(fbId){
+				this.users = _.reject(this.users, function(i){ return i.fbId == fbId});
+			}
+			
+			Users.prototype.userAlreadyConnected = function(){
+				this.config.loginDivObject.html('Already logged in, in another window');
+			}
+			
+			function Draw(config){
+				
+				this.config = {
+					'canevas':'',
+					'socket':''
+				}
+				
+				_.extend(this.config,config);
+				
+				if(!this.config.canevas[0].getContext) { 
+					alert('Your browser is not compatible with the game, go download google Chrome it\'s the best!');
 					return false;
 				}
-								
-				this.drawDown = function drawDown(x,y) {
-					if(!this.drawing){
-						this.drawing = true;
-						this.ctx.lineWidth = 1;
-						this.ctx.beginPath();
-						this.ctx.moveTo(x-this.canevas.offset().left,y-this.canevas.offset().top);
+				
+				this.ctx = this.config.canevas[0].getContext("2d");
+				//State of drawing action
+				this.drawing = false;
+				this.points = [];
+				this.pointsTemp = [];
+				
+				//Mouse Event on canvas
+				this.config.canevas.bind('mousedown',this,function(e){
+					e.data.mouseDown(e.pageX,e.pageY);
+				});
+				this.config.canevas.bind('mousemove',this,function(e){
+					e.data.mouseMove(e.pageX,e.pageY);
+				});
+				this.config.canevas.bind('mouseup',this,function(e){
+					e.data.mouseUp();
+				});
+				//Keyboard events on Document
+				$(document).bind('keyup',this,function(e){
+					switch(e.which) {
+						case 32:
+							e.data.deletePoints();
+						break; 
+					}
+				}); 
+					
+			}
+			
+			Draw.prototype.mouseDown = function(x,y){
+				if(!this.drawing){
+					this.drawing = true;
+					this.ctx.lineWidth = 1;
+					this.ctx.beginPath();
+					this.ctx.moveTo(x-this.config.canevas.offset().left,y-this.config.canevas.offset().top);
+					this.pointsTemp = [];
+					this.pointsTemp.push({x:x-this.config.canevas.offset().left,y:y-this.config.canevas.offset().top,s:true});
+				}
+			}
+			
+			Draw.prototype.mouseMove = function(x,y){
+				if(this.drawing){
+					this.ctx.lineTo(x-this.config.canevas.offset().left,y-this.config.canevas.offset().top);
+					this.ctx.stroke();
+					this.pointsTemp.push({x:x-this.config.canevas.offset().left,y:y-this.config.canevas.offset().top,s:false});
+					if(this.pointsTemp.length > 2) {
+						this.config.socket.sendData('drawingData',this.pointsTemp);
+						$.merge(this.points,this.pointsTemp);
 						this.pointsTemp = [];
-						this.pointsTemp.push({x:x-this.canevas.offset().left,y:y-this.canevas.offset().top,s:true});
 					}
 				}
-				
-				this.drawMove = function drawMove(x,y) {
-					if(this.drawing){
-						this.ctx.lineTo(x-this.canevas.offset().left,y-this.canevas.offset().top);
-						this.ctx.stroke();
-						this.pointsTemp.push({x:x-this.canevas.offset().left,y:y-this.canevas.offset().top,s:false});
-						if(this.pointsTemp.length > 2) {
-							this.socket.sendData('drawingData',this.pointsTemp);
-							$.merge(this.points,this.pointsTemp);
-							this.pointsTemp = [];
-						}
+			}
+			
+			Draw.prototype.mouseUp = function(){
+				this.drawing = false;
+				$.merge(this.points,this.pointsTemp);
+				this.config.socket.sendData('drawingData',this.pointsTemp);	
+			}
+			
+			Draw.prototype.drawPoints = function(points,merge){	
+				if(!points)
+					points = this.points;
+				_.each(points, function(point){
+					if(point.s){
+						this.ctx.beginPath();
+						this.ctx.moveTo(point.x-this.config.canevas.offset().left,point.y-this.config.canevas.offset().top);
+					} else {
+						this.ctx.lineTo(point.x-this.config.canevas.offset().left,point.y-this.config.canevas.offset().top);
+						this.ctx.stroke();	
 					}
-				}
+				},this);
+				if(merge)
+					$.merge(this.points,points);
+			}
+			
+			Draw.prototype.deletePoints = function(){
+				this.points = [];
+				this.ctx.clearRect(0,0,this.config.canevas.width(),this.config.canevas.height());
+			}
+			
+
+		
+			//Inheritance from Users
+			Game.prototype = new Users();
+			Game.prototype.constructor = Game;
+			Game.prototype.parent = Users.prototype;
+			function Game(config){
+				//Init Users class
+				Users.call(this,config);
+				//Init Draw class
+				this.draw = new Draw(config);
 				
-				this.drawUp = function drawUp(){
-					this.drawing = false;
-					$.merge(this.points,this.pointsTemp);
-					this.socket.sendData('drawingData',this.pointsTemp);
-				}
+				$(window).bind('resize',this,function(e){
+					e.data.config.canevas[0].height = ($(window).height()-5);
+					e.data.config.canevas[0].width = $(window).width();
+					e.data.draw.drawPoints();
+				});
+				config.canevas[0].height = ($(document).height()-6);
+				config.canevas[0].width = $(document).width();
 				
-				this.drawArray = function drawArray(points){
-					for(var i=0;i<points.length;i++) {
-						if(points[i].s){
-							
-							this.ctx.beginPath();
-							this.ctx.moveTo(points[i].x-this.canevas.offset().left,points[i].y-this.canevas.offset().top);
-						} else {
-							this.ctx.lineTo(points[i].x-this.canevas.offset().left,points[i].y-this.canevas.offset().top);
-							this.ctx.stroke();
-						}
-					}
-				}
-				
-				
-				this.screenResize = function screenResize() {
-				
-					this.canevas[0].height = ($(window).height()-5);
-					this.canevas[0].width = $(window).width();
-					this.drawArray(this.points);
-				
-				}
-				
-				this.del = function(){
-					this.points = [];
-					this.ctx.clearRect(0,0,this.canevas.width(),this.canevas.height());
-				}
+			}
+
+			Game.prototype.addPlayer = function(player){
+				player.drawing = false;
+				delegate = function(user){
+					$('#players').append('<li id="'+user.id+'">'+user.name+'</li>');
+				};
+				this.parent.addUser.call(this,player.fbId,delegate);
+			}
+
+			Game.prototype.addPlayers = function(players){
+				_.each(players, function(player){
+					this.addPlayer.call(this,player);
+				},this);	
+			}
+			
+			Game.prototype.deletePlayer = function(fbId){
+				this.parent.deleteUser.call(this,fbId);
+				$('#'+fbId).remove();
 			}
 
 			$(document).ready(function(){
+				io.setPath('client/');
+				var socket = new io.Socket(null, {port: 8080});
+				io.Socket.prototype.sendData = function(type,data) {
+					dataObject = {
+						type : type,
+						data : data
+						};
+					this.send(JSON.stringify(dataObject));
+				};
 				
 				socket.addEvent('message', function(data){
 					
 					data = JSON.parse(data);
 					switch(data.type) {
 						case 'drawingData':
-							if(drawObject){
-								drawObject.drawArray(data.data);
-								$.merge(drawObject.points,data.data);
-							}
+							game.draw.drawPoints(data.data,true);
 						break;
 						case 'usersList':
-							panelObject.addPlayers(data.data);	
+							game.addPlayers(data.data);	
 						break;
-						case 'userConnect':
-							panelObject.addPlayer(data.data);
+						case 'playerConnect':
+							game.addPlayer(data.data);
 						break;
 						case 'userDisconnect':
-							panelObject.deleteUser(data.data);
+							game.deletePlayer(data.data.fbId);
 						break;
 						case 'userAlreadyConnected':
-							panelObject.userAlreadyConnected();
+							game.userAlreadyConnected();
 						break;
 					}
 				
 				});
-				
-				socket.addEvent('disconnect', function(data){
-				});
-				
-				socket.addEvent('connect', function(data){
-				});
-				
+				socket.addEvent('disconnect', function(data){});
+				socket.addEvent('connect', function(data){});
 				socket.connect();
-			
-				FB.init({ apiKey: '41498240faa11983d28cc4504b952284' });
 				
-				FB.getLoginStatus(handleSessionResponse);
+				var game = new Game({'socket':socket,'fbApiKey':'41498240faa11983d28cc4504b952284','canevas':$("#board"),'loginDivObject':$("#user")});
 				
 				
 				$('#login').click(function(){
-					FB.login(handleSessionResponse);
+					FB.login(function(response){game.fbHandleSessionResponse(response)});
 				});
-				
-				
-				
-				getUserInfos = function(id,fields,callback){
-					FB.api({
-						method:'fql.query',
-						query: 'SELECT '+ fields.toString() +' FROM profile WHERE id=' + id
-						},
-						callback
-					);
-				
-				}
-				
-				
-				function handleSessionResponse(response){
-				
-					if(!response.session) {
-					
-					}
-					
-					FB.api({
-						method:'fql.query',
-						query: 'SELECT name,id FROM profile WHERE id=' + FB.getSession().uid
-						},
-						function(response){
-							panelObject.connect(response[0]);
-							socket.sendData('userConnect',response[0].id);
-						}
-					);
-					
-				};
-				
-				var drawObject = new draw($("#board"),socket);
-				var panelObject = new panel($("#panel"));
-				
-				$(window).resize(function() {
-					drawObject.screenResize();
-					panelObject.screenResize();
-				});
-				
-				$(document).keyup(function(e){
-					switch(e.which) {
-						case 32:
-							drawObject.del();	
-						break
-					}
-				});
-					
+								
 			});
 
 		</script>
@@ -279,7 +326,6 @@
 	<body>
 	<div id="fb-root"></div>
 		<script src="http://connect.facebook.net/en_US/all.js"></script>
-		
 		<h1 id="title">Drawrathon</h1>
 		<div id="panel">
 			<div id="user">
@@ -290,7 +336,5 @@
 		</div>
 		<canvas id="board">	
 		</canvas>
-
-		
 	</body>
 </html>
