@@ -40,20 +40,6 @@
 			
     	</style>
 		<script>
-			
-			
-			function panel(panel) {
-
-				this.panel = panel;
-				this.panel.height($(document).height()*80/100);
-				this.playerFbId;
-				
-				this.screenResize = function(){
-					this.panel.height($(window).height()*80/100);
-				}
-				
-			}
-			
 			function Users(config){
 				
 				if( typeof( name ) == "undefined" ){
@@ -112,6 +98,8 @@
 			}
 			
 			Users.prototype.addUser = function(fbId,delegate){
+			
+
 				
 				var _this = {'_this':this,'delegate':delegate}; 
 				
@@ -130,6 +118,7 @@
 			
 			Users.prototype.addUsers = function(users){
 				_.each(users,function(user){
+						
 						this.addUser(user.fbId);
 				},this);
 			}
@@ -246,7 +235,10 @@
 				//Init Draw class
 				this.draw = new Draw(config);
 				
+				$('#panel').height($(document).height()*80/100);
+				
 				$(window).bind('resize',this,function(e){
+					$('#panel').height($(window).height()*80/100);
 					e.data.config.canevas[0].height = ($(window).height()-5);
 					e.data.config.canevas[0].width = $(window).width();
 					e.data.draw.drawPoints();
@@ -256,17 +248,17 @@
 				
 			}
 
-			Game.prototype.addPlayer = function(player){
-				player.drawing = false;
+			Game.prototype.addPlayer = function(fbId){
 				delegate = function(user){
+					user.drawing = false;
 					$('#players').append('<li id="'+user.id+'">'+user.name+'</li>');
 				};
-				this.parent.addUser.call(this,player.fbId,delegate);
+				this.parent.addUser.call(this,fbId,delegate);
 			}
 
 			Game.prototype.addPlayers = function(players){
 				_.each(players, function(player){
-					this.addPlayer.call(this,player);
+					this.addPlayer.call(this,player.fbId);
 				},this);	
 			}
 			
@@ -296,11 +288,11 @@
 						case 'usersList':
 							game.addPlayers(data.data);	
 						break;
-						case 'playerConnect':
+						case 'userConnect':
 							game.addPlayer(data.data);
 						break;
 						case 'userDisconnect':
-							game.deletePlayer(data.data.fbId);
+							game.deletePlayer(data.data);
 						break;
 						case 'userAlreadyConnected':
 							game.userAlreadyConnected();
