@@ -6,327 +6,150 @@
 		<script src="client/socket.io.js" type="text/javascript"></script>
 		<script src="js/json.js" type="text/javascript"></script>
 		<script src="js/underscore.js" type="text/javascript"></script>
+		<script src="js/users.js"></script> 
+		<script src="js/draw.js"></script> 
+		<script src="js/game.js"></script> 
+		<script src="js/main.js"></script> 
 		<style>
-			body {margin:0px;
+		
+			body, ol, li, img, p {
+				margin:0px;
+				padding:0px;
+				border:0px;
+				font:	normal 12px/20px helvetica,arial,sans-serif;
+				-webkit-user-select:none;
+				user-select:none;
+				list-style:none;
+				
 			}
+
 			#title {
 				position:absolute;
-				width:100px;
-				top:30px;
-				left:80px;
+				top:20px;
+				left:60px;
+				text-shadow: 1px 1px 4px #cccccc;
+				font-size:40px;
+				cursor:default;
+				-moz-user-select:none;
 			}
-			
-			#board {
-			}
-			
-			#panel {
-				color:#ffffff;
-				position:absolute;
-				width:255px;
-				height:485px;
-				min-height:250px;
-				padding:15px;
-				top:30px;
-				right:10px;
-				background-color:#000000;
-				border-radius:8px;
-				-moz-border-radius:8px;
-			}
-			
-			#panel h2 {
-				color:#ffffff;
-				margin:0px;
-			}
-			
-    	</style>
-		<script>
-			function Users(config){
-				
-				if( typeof( name ) == "undefined" ){
-					return;
-				}
-				
-				//List of object parameters pass as an object
-				this.config = {
-					'fbApiKey':'',
-					'socket':'',
-					'loginDivObject':''
-				}
-				
-				_.extend(this.config,config);
-				
-				//Array of all logged in facebook users using the app
-				this.users=[];
-				//Object containing the logged in user infos			
-				this.user={};
-				
-				if(this.config.fbApiKey){
-					FB.init({ apiKey: this.config.fbApiKey });
-					FB.getLoginStatus(_.bind(this.fbHandleSessionResponse, this));
-				} else {
-					return false;	
-				}
-				
-			}
-			
-			Users.prototype.fbQueryProfile = function(id,fields,callback){
-				FB.api({
-					method:'fql.query',
-					query: 'SELECT '+ fields.toString() +' FROM profile WHERE id=' + id
-					},
-					callback
-				);
-			}
-			
-			Users.prototype.fbHandleSessionResponse = function(response){
-				if(!response.session)
-					return false;
-				
-				var callback = function(response){ 
-					this.userConnect(response[0]);
-					this.config.socket.sendData('userConnect',response[0].id);
-				};
-				callback = _.bind(callback, this);
-				this.fbQueryProfile(FB.getSession().uid,['name','id'],callback);
-			
-			}
-			
-			Users.prototype.userConnect = function(user){
-				this.user = {'id':user.id,'name':user.name,'artist':false};
-				if(this.config.loginDivObject)
-					this.config.loginDivObject.html(this.user.name);
-			}
-			
-			Users.prototype.addUser = function(fbId,delegate){
-			
-
-				
-				var _this = {'_this':this,'delegate':delegate}; 
-				
-				var callback = function(response){ 
-					this._this.users.push({
-						'id':response[0].id,
-						'name':response[0].name
-					});
-					if(this.delegate)
-						this.delegate(response[0]);
-				};
-				
-				callback = _.bind(callback, _this);
-				this.fbQueryProfile(fbId,['name','id'],callback);
-			}
-			
-			Users.prototype.addUsers = function(users){
-				_.each(users,function(user){
 						
-						this.addUser(user.fbId);
-				},this);
+			#theme {
+				position:absolute;
+				top:90px;
+				left:60px;
+				font-size:30px;
 			}
 			
-			Users.prototype.deleteUser = function(fbId){
-				this.users = _.reject(this.users, function(i){ return i.fbId == fbId});
-			}
-			
-			Users.prototype.userAlreadyConnected = function(){
-				this.config.loginDivObject.html('Already logged in, in another window');
-			}
-			
-			function Draw(config){
-				
-				this.config = {
-					'canevas':'',
-					'socket':''
-				}
-				
-				_.extend(this.config,config);
-				
-				if(!this.config.canevas[0].getContext) { 
-					alert('Your browser is not compatible with the game, go download google Chrome it\'s the best!');
-					return false;
-				}
-				
-				this.ctx = this.config.canevas[0].getContext("2d");
-				//State of drawing action
-				this.drawing = false;
-				this.points = [];
-				this.pointsTemp = [];
-				
-				//Mouse Event on canvas
-				this.config.canevas.bind('mousedown',this,function(e){
-					e.data.mouseDown(e.pageX,e.pageY);
-				});
-				this.config.canevas.bind('mousemove',this,function(e){
-					e.data.mouseMove(e.pageX,e.pageY);
-				});
-				this.config.canevas.bind('mouseup',this,function(e){
-					e.data.mouseUp();
-				});
-				//Keyboard events on Document
-				$(document).bind('keyup',this,function(e){
-					switch(e.which) {
-						case 32:
-							e.data.deletePoints();
-						break; 
-					}
-				}); 
-					
-			}
-			
-			Draw.prototype.mouseDown = function(x,y){
-				if(!this.drawing){
-					this.drawing = true;
-					this.ctx.lineWidth = 1;
-					this.ctx.beginPath();
-					this.ctx.moveTo(x-this.config.canevas.offset().left,y-this.config.canevas.offset().top);
-					this.pointsTemp = [];
-					this.pointsTemp.push({x:x-this.config.canevas.offset().left,y:y-this.config.canevas.offset().top,s:true});
-				}
-			}
-			
-			Draw.prototype.mouseMove = function(x,y){
-				if(this.drawing){
-					this.ctx.lineTo(x-this.config.canevas.offset().left,y-this.config.canevas.offset().top);
-					this.ctx.stroke();
-					this.pointsTemp.push({x:x-this.config.canevas.offset().left,y:y-this.config.canevas.offset().top,s:false});
-					if(this.pointsTemp.length > 2) {
-						this.config.socket.sendData('drawingData',this.pointsTemp);
-						$.merge(this.points,this.pointsTemp);
-						this.pointsTemp = [];
-					}
-				}
-			}
-			
-			Draw.prototype.mouseUp = function(){
-				this.drawing = false;
-				$.merge(this.points,this.pointsTemp);
-				this.config.socket.sendData('drawingData',this.pointsTemp);	
-			}
-			
-			Draw.prototype.drawPoints = function(points,merge){	
-				if(!points)
-					points = this.points;
-				_.each(points, function(point){
-					if(point.s){
-						this.ctx.beginPath();
-						this.ctx.moveTo(point.x-this.config.canevas.offset().left,point.y-this.config.canevas.offset().top);
-					} else {
-						this.ctx.lineTo(point.x-this.config.canevas.offset().left,point.y-this.config.canevas.offset().top);
-						this.ctx.stroke();	
-					}
-				},this);
-				if(merge)
-					$.merge(this.points,points);
-			}
-			
-			Draw.prototype.deletePoints = function(){
-				this.points = [];
-				this.ctx.clearRect(0,0,this.config.canevas.width(),this.config.canevas.height());
-			}
-			
-
-		
-			//Inheritance from Users
-			Game.prototype = new Users();
-			Game.prototype.constructor = Game;
-			Game.prototype.parent = Users.prototype;
-			function Game(config){
-				//Init Users class
-				Users.call(this,config);
-				//Init Draw class
-				this.draw = new Draw(config);
-				
-				$('#panel').height($(document).height()*80/100);
-				
-				$(window).bind('resize',this,function(e){
-					$('#panel').height($(window).height()*80/100);
-					e.data.config.canevas[0].height = ($(window).height()-5);
-					e.data.config.canevas[0].width = $(window).width();
-					e.data.draw.drawPoints();
-				});
-				config.canevas[0].height = ($(document).height()-6);
-				config.canevas[0].width = $(document).width();
-				
+			#picture {
+				position:absolute;
+				top:130px;
+				left:60px;
+				width:150px;
 			}
 
-			Game.prototype.addPlayer = function(fbId){
-				delegate = function(user){
-					user.drawing = false;
-					$('#players').append('<li id="'+user.id+'">'+user.name+'</li>');
-				};
-				this.parent.addUser.call(this,fbId,delegate);
+			#counter {
+				position:absolute;
+				font-size:500px;
+				width:100%;
+				text-align:center;
 			}
 
-			Game.prototype.addPlayers = function(players){
-				_.each(players, function(player){
-					this.addPlayer.call(this,player.fbId);
-				},this);	
+			#panel {
+				color:#000000;
+				background-color:#ffffff;
+				position:absolute;
+				width:230px;
+				padding:0px;
+				top:30px;
+				right:30px;
+				box-shadow: 1px 1px 5px #cccccc;
+				-moz-box-shadow: 1px 1px 5px #cccccc;
+			    -webkit-box-shadow: 1px 1px 5px #cccccc;
+			    overflow:auto;
+			    max-height:70%;
 			}
 			
-			Game.prototype.deletePlayer = function(fbId){
-				this.parent.deleteUser.call(this,fbId);
-				$('#'+fbId).remove();
+			#header {
+				background-color:#f1f1f1;
+				height:50px;
+				border-bottom:1px #f1f1f1 solid;
+				padding:10px;
+			}
+			
+			#panel li{
+				margin:0px 10px 0px 10px;
+				padding-top:10px;
+				padding-bottom:10px;
+				height:50px;
+				border-bottom:1px #f1f1f1 solid;
+			}
+			
+			#input{
+				text-align:center;
+				width:100%;
+				position:absolute;
+				bottom:40px;
+				color:#000000;
+				font-size:18px;
+			}
+			
+			input{
+				font-size:26px;
+				width:60%;
+			}
+			
+			.pic {
+				float:left;
+				margin-right:8px;
+			}
+			
+			.points{
+				margin-top:3px;
+				margin-left:65px;
+			}
+			
+			#console{
+				position:absolute;
+				bottom:100px;
+				left:30px;
+				z-index:0px;
+			}
+			
+			#console li {
+				font-size:14px;
+			}
+			
+			#description {
+				position:fixed;
+				left:320px;
+				top:130px;
+				width:30%;
+				display:none;
 			}
 
-			$(document).ready(function(){
-				io.setPath('client/');
-				var socket = new io.Socket(null, {port: 8080});
-				io.Socket.prototype.sendData = function(type,data) {
-					dataObject = {
-						type : type,
-						data : data
-						};
-					this.send(JSON.stringify(dataObject));
-				};
-				
-				socket.addEvent('message', function(data){
-					
-					data = JSON.parse(data);
-					switch(data.type) {
-						case 'drawingData':
-							game.draw.drawPoints(data.data,true);
-						break;
-						case 'usersList':
-							game.addPlayers(data.data);	
-						break;
-						case 'userConnect':
-							game.addPlayer(data.data);
-						break;
-						case 'userDisconnect':
-							game.deletePlayer(data.data);
-						break;
-						case 'userAlreadyConnected':
-							game.userAlreadyConnected();
-						break;
-					}
-				
-				});
-				socket.addEvent('disconnect', function(data){});
-				socket.addEvent('connect', function(data){});
-				socket.connect();
-				
-				var game = new Game({'socket':socket,'fbApiKey':'41498240faa11983d28cc4504b952284','canevas':$("#board"),'loginDivObject':$("#user")});
-				
-				
-				$('#login').click(function(){
-					FB.login(function(response){game.fbHandleSessionResponse(response)});
-				});
-								
-			});
-
-		</script>
+    	</style>
 	</head>
 	<body>
 	<div id="fb-root"></div>
 		<script src="http://connect.facebook.net/en_US/all.js"></script>
 		<h1 id="title">Drawrathon</h1>
+		<div id="theme"></div>
+		<div id="picture"></div>
 		<div id="panel">
-			<div id="user">
-				<button id="login">Login</button>
+			<div id="header">
+				<div style="text-align:center;margin-top:15px;"><a href="javascript:;"><img id="login" src="http://static.ak.fbcdn.net/rsrc.php/z38X1/hash/6ad3z8m6.gif" /></a></div>
 			</div>
-			<ul id="players">
-			</ul>
+			<ol id="players">
+				<li class="alone">Your alone... invite a lest a friend to play the game! Go on <a target="_blank" href="http://www.facebook.com">Facebook</a> chat and ask someone to join you!</li>
+			</ol>
 		</div>
-		<canvas id="board">	
+		<div id="input">
+			<input id="answer"/><a id="skip" href="javascript:;" style="display:none;">Skip it!</a>
+		</div>
+		<ul id="console">
+				
+		</ul>
+		<canvas id="board">
 		</canvas>
-	</body>
+</body>
 </html>
