@@ -2,7 +2,7 @@ var PUBLIC_DIRECTORY_PATH = 'public/';
 var DEFAULT_FILE = 'index.html';
 
 var http = require('http'),
-	io = require('./lib/socket.io-node'),
+	io = require('./lib/socket.io'),
 	url = require('url'),
 	path = require('path'),
 	sys = require('sys'),
@@ -15,7 +15,7 @@ var getWordsList = require('./words');
 server = http.createServer(function(req, res){
 	var uri = url.parse(req.url).pathname;
 	uri = uri + (uri.substr(-1) === '/' ? DEFAULT_FILE:'');
-	var filename = path.join(process.cwd(),PUBLIC_DIRECTORY_PATH, uri);
+	var filename = path.join(__dirname,PUBLIC_DIRECTORY_PATH, uri);
 	path.exists(filename, function(exists){
 	
 		if(!exists) {
@@ -52,7 +52,7 @@ server = http.createServer(function(req, res){
 
 });
 
-server.listen(8080);
+server.listen(80);
 
 var io = io.listen(server);
 
