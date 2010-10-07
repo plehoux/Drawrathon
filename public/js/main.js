@@ -1,6 +1,6 @@
 
 $(document).ready(function(){
-	io.setPath('client/Socket.io/');
+	io.setPath('client/Socket.IO/');
 	var socket = new io.Socket(null, {port: 80});
 	io.Socket.prototype.sendData = function(type,data) {
 		dataObject = {
